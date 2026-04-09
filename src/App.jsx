@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { 
   Home, CreditCard, Wallet, ListOrdered, Plus, 
-  ChevronLeft, ChevronRight, TrendingUp, TrendingDown, X, Landmark
+  ChevronLeft, ChevronRight, TrendingUp, TrendingDown, X, Landmark, Trash2
 } from 'lucide-react';
 
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -24,39 +24,34 @@ export default function App() {
 
   const fetchData = async () => {
     setLoading(true);
-    try {
-      const { data: accs } = await supabase.from('accounts').select('*');
-      const { data: crds } = await supabase.from('cards').select('*');
-      const { data: trans } = await supabase.from('transactions').select('*');
-      if (accs) setAccounts(accs);
-      if (crds) setCards(crds);
-      if (trans) setTransactions(trans);
-    } catch (e) {
-      console.error(e);
-    }
+    const { data: accs } = await supabase.from('accounts').select('*').order('name');
+    const { data: crds } = await supabase.from('cards').select('*').order('name');
+    const { data: trans } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+    if (accs) setAccounts(accs);
+    if (crds) setCards(crds);
+    if (trans) setTransactions(trans);
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleAddAccount = async (account) => {
-    const { error } = await supabase.from('accounts').insert([{ 
-      name: account.name, 
-      balance: Number(account.balance) 
-    }]);
-    if (error) {
-      alert("Erro ao salvar no Banco: " + error.message);
-    } else {
-      fetchData();
-      setIsAccountModalOpen(false);
+  // --- FUNCOES DE EXCLUSAO ---
+  const handleDelete = async (table, id) => {
+    if (window.confirm("Tem certeza que deseja excluir?")) {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) alert("Erro ao excluir: " + error.message);
+      else fetchData();
     }
   };
 
+  const handleAddAccount = async (account) => {
+    const { error } = await supabase.from('accounts').insert([{ name: account.name, balance: Number(account.balance) }]);
+    if (error) alert(error.message);
+    else { fetchData(); setIsAccountModalOpen(false); }
+  };
+
   const handleAddCard = async (card) => {
-    const { error } = await supabase.from('cards').insert([{ 
-      name: card.name, 
-      limit_total: Number(card.limit) 
-    }]);
+    const { error } = await supabase.from('cards').insert([{ name: card.name, limit_total: Number(card.limit) }]);
     if (error) alert(error.message);
     else { fetchData(); setIsCardModalOpen(false); }
   };
@@ -86,7 +81,7 @@ export default function App() {
     return { income, expense, creditCard, accountsBalance };
   }, [currentMonthTransactions, accounts]);
 
-  if (loading) return <div className="flex h-screen items-center justify-center font-sans">Carregando dados...</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center font-sans">Carregando...</div>;
 
   return (
     <div className="bg-slate-50 min-h-screen pb-24 font-sans text-slate-900">
@@ -124,8 +119,13 @@ export default function App() {
             </div>
             {accounts.map(acc => (
               <div key={acc.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
-                <p className="font-medium text-slate-700">{acc.name}</p>
-                <p className="font-bold">{formatCurrency(acc.balance)}</p>
+                <div className="flex items-center gap-3">
+                   <p className="font-medium text-slate-700">{acc.name}</p>
+                   <p className="font-bold">{formatCurrency(acc.balance)}</p>
+                </div>
+                <button onClick={() => handleDelete('accounts', acc.id)} className="text-slate-300 hover:text-rose-500 transition-colors">
+                  <Trash2 size={18} />
+                </button>
               </div>
             ))}
           </div>
@@ -138,7 +138,10 @@ export default function App() {
               <button onClick={() => setIsCardModalOpen(true)} className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg text-sm font-medium">+ Novo</button>
             </div>
             {cards.map(card => (
-              <div key={card.id} className="bg-slate-800 p-5 rounded-2xl text-white shadow-md">
+              <div key={card.id} className="bg-slate-800 p-5 rounded-2xl text-white shadow-md relative group">
+                <button onClick={() => handleDelete('cards', card.id)} className="absolute top-4 right-4 text-slate-500 hover:text-rose-400">
+                  <Trash2 size={18} />
+                </button>
                 <p className="font-medium opacity-80">{card.name}</p>
                 <p className="text-lg font-bold">{formatCurrency(card.limit_total)}</p>
               </div>
@@ -151,8 +154,16 @@ export default function App() {
             <h2 className="text-xl font-bold">Extrato</h2>
             {currentMonthTransactions.map(t => (
               <div key={t.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
-                <p className="font-medium text-slate-700">{t.description}</p>
-                <p className={`font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-500'}`}>{formatCurrency(t.amount)}</p>
+                <div className="flex-1">
+                  <p className="font-medium text-slate-700">{t.description}</p>
+                  <p className="text-[10px] text-slate-400">{new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <p className={`font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-500'}`}>{formatCurrency(t.amount)}</p>
+                  <button onClick={() => handleDelete('transactions', t.id)} className="text-slate-200 hover:text-rose-500">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -168,6 +179,7 @@ export default function App() {
 
       <button onClick={() => setIsTransactionModalOpen(true)} className="fixed bottom-24 right-4 bg-indigo-600 text-white p-4 rounded-full shadow-lg"><Plus /></button>
 
+      {/* MODAIS (Mesma logica anterior) */}
       {isAccountModalOpen && (
         <Modal title="Nova Conta" onClose={() => setIsAccountModalOpen(false)} onSave={handleAddAccount} fields={[{name:'name', label:'Nome', type:'text'}, {name:'balance', label:'Saldo Inicial', type:'number'}]} />
       )}
@@ -181,6 +193,7 @@ export default function App() {
   );
 }
 
+// COMPONENTES AUXILIARES (MODAL E FORM)
 function Modal({ title, onClose, onSave, fields }) {
   const [data, setData] = useState({});
   return (
@@ -219,12 +232,12 @@ function TransactionForm({ onClose, onSave, accounts, cards }) {
         <input type="date" value={data.date} className="w-full border rounded-xl px-4 py-2 mb-4" onChange={e => setData({...data, date: e.target.value})} />
         {type !== 'credit_card' ? (
           <select className="w-full border rounded-xl px-4 py-2 mb-4" onChange={e => setData({...data, accountId: e.target.value})}>
-            <option>Selecionar Conta</option>
+            <option value="">Selecionar Conta</option>
             {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         ) : (
           <select className="w-full border rounded-xl px-4 py-2 mb-4" onChange={e => setData({...data, cardId: e.target.value})}>
-            <option>Selecionar Cartao</option>
+            <option value="">Selecionar Cartao</option>
             {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         )}
